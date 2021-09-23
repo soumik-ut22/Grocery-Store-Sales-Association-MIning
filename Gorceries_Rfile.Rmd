@@ -1,0 +1,160 @@
+---
+title: "Grocery associate rule mining"
+author: "Soumik Choudhuri"
+output:
+  word_document: default
+  pdf_document: default
+---
+# ASSOCIATE RULE MINING
+
+
+## Treatment of the data
+
+In this step, we first took the Groceries dataset where each row represented the items bought by a user
+We then created a dataframe to have only 2 columns - user_id and product where user_id is the row number for groceries datasets
+and grouped the products by user_id
+
+```{r ans f-1, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+
+library(tidyverse)
+library(arules)  # has a big ecosystem of packages built around it
+library(arulesViz)
+library(reshape2)
+
+temp=read.csv('groceries.txt',header=FALSE)
+temp=rownames_to_column(temp)
+tt=melt(temp,id.vars = 'rowname')
+tt= tt[tt$value!='',]
+
+tt=tt[,c('rowname','value')]
+colnames(tt)=c('user_id','product')
+
+tt$user_id=strtoi(tt$user_id)
+tt=tt[order(tt$user_id),]
+
+tt$user_id=factor(tt$user_id)
+prod_lt_by_user = split(x=tt$product, f=tt$user_id)
+prod_lt_by_user = lapply(prod_lt_by_user, unique)
+
+```
+
+
+## Summary of the products distribution
+
+```{r ans f-2, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+
+prod_dist = as(prod_lt_by_user, "transactions")
+summary(prod_dist)
+
+```
+
+
+## OBSERVATIONS
+
+In the summary of the prod_dist, we find that "whole milk" was the highest bought item followed by "other vegetables"
+Also, we found that in majority (around 7079 times), 4 items were bought in a single transaction.
+
+
+## Running the apriori function to get the support, confidence and lift
+
+```{r ans f-3, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+
+prod_for_users = apriori(prod_dist, 
+                     parameter=list(support=.005, confidence=.1, maxlen=5))
+
+plot(prod_for_users)
+```
+
+
+## OBSERVATIONS
+
+From the scatter plot we found that there are a few items with support less than 0.05 but have a very high confidence above 0.3
+which indicated that there is a good association between these items
+So we decided to further inspect these items.
+
+
+
+## Inspection steps and Observations
+
+We started with the inspection of product combination with confidence above 0.3
+
+```{r ans f-4, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+
+inspect(subset(prod_for_users, confidence > 0.3))
+```
+
+
+Upon inspection, we found that "onions" and "other vegetables" have the highest lift indicating a strong tendency of other vegetables being bought with onions
+Same is the case with "root vegetables" and "other vegetables" or vegetables along with milk which have lift close to 3
+Among these, we find the highest count of 625 for the combination of "other vegetables" and "whole milk".
+
+
+Next, we inspect the product combinations with count > 150 and lift > 1.5
+
+```{r ans f-5, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+
+inspect(subset(prod_for_users, count > 150 & lift > 1.5 ))
+```
+
+Upon putting the above condition of count and lift, we find that "pip fruit" and "tropical fruit" have a lift close to 4 indicating high association between them
+
+
+We find that people generally buy whole milk and other vegetables together upon inspecting for lift > 1 and support > 0.03
+
+```{r ans f-6, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+inspect(subset(prod_for_users, subset=lift > 1 & support > 0.03))
+```
+
+
+Upon putting the condition of support > 0.10, we find that these are values for individual items like "soda" or "rolls/buns"
+
+```{r ans f-7, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+inspect(subset(prod_for_users, subset = support > 0.10))
+```
+
+
+
+## NETWORK GRAPHS
+
+
+We then plot the network graph to see the association between the different items bought.
+
+```{r ans f-8, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+sub1 = subset(prod_for_users, subset=confidence > 0.01 & support > 0.005)
+plot(head(sub1, 100, by='lift'), method='graph')
+
+```
+
+## OBSERVATIONS
+
+1)We get to see that other vegetables and whole milk are the items which are highest associated with other items i.e. they have the highest network.
+
+2) Also, we find bottled water, beer, soda, chocolate and juice belong to a completely different cluster indicating they are not associated with vegetables or whole milk or other regular items
+
+
+
+## GEPHI PLOTS
+
+Finally, we use the Gephi software to visualize the association between the items.
+
+```{r ans f-9, include=TRUE, echo=FALSE, fig.height=10, fig.width=15}
+
+#install.packages("BiocManager") 
+#BiocManager::install("EBImage")
+library(EBImage)
+img = readImage("Groceries.png")
+display(img, method = "raster")
+img2 = readImage("grocery_color_degree_size_betweeness.png")
+display(img2, method = "raster")
+```
+
+
+## OBSERVATIONS
+
+1) Here we see that "other vegetables" and "whole milk" have the biggest font followed by "root vegetables", "yogurt", "sausage" and others.
+
+2) The font of an item is proportional to the degree of the node which in turn is related to the association of that item.
+The Gephi plot also validates the earlier network plot indicating that vegetables and whole milk have highest association and are often bought with other items
+
+3) In the second Gephi plot we find that there are 2 clusters validating our earlier inference that bottled water, beer, soda are not associated with the regular items and are mostly bought separately.
+
